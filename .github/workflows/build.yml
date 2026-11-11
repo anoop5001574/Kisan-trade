@@ -21,9 +21,13 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Create Project and Inject Code
+      - name: Create Project, Add Packages & Inject Code
         run: |
           flutter create --org com.kisantrade --project-name kisan_trade kisan_app
+          cd kisan_app
+          flutter pub add geolocator http
+          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
+          cd ..
           find . -maxdepth 1 -iname "*dart" -exec cp -f "{}" kisan_app/lib/main.dart \;
 
       - name: Build Android APK
