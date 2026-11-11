@@ -1,97 +1,88 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
-  runApp(const KisanTradeAuthApp());
+  runApp(const KisanTradeApp());
 }
 
-class KisanTradeAuthApp extends StatelessWidget {
-  const KisanTradeAuthApp({super.key});
+class KisanTradeApp extends StatelessWidget {
+  const KisanTradeApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Kisan Trade Registration',
+      debugShowColors: false,
+      title: 'Kisan Trade',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E7D32)),
         useMaterial3: true,
       ),
-      home: const RegistrationFlowScreen(),
+      home: const AuthScreen(),
     );
   }
 }
 
-class RegistrationFlowScreen extends StatefulWidget {
-  const RegistrationFlowScreen({super.key});
+// रजिस्ट्रेशन स्क्रीन
+class AuthScreen extends StatefulWidget {
+  const AuthScreen({super.key});
 
   @override
-  State<RegistrationFlowScreen> createState() => _RegistrationFlowScreenState();
+  State<AuthScreen> createState() => _AuthScreenState();
 }
 
-class _RegistrationFlowScreenState extends State<RegistrationFlowScreen> {
-  // स्टेप कंट्रोल (0: मोबाइल इनपुट, 1: OTP, 2: प्रोफाइल डिटेल)
+class _AuthScreenState extends State<AuthScreen> {
   int currentStep = 0;
-
-  // यूजर डेटा
   String selectedRole = 'किसान (Farmer)';
   final TextEditingController phoneController = TextEditingController();
   final TextEditingController otpController = TextEditingController();
   final TextEditingController nameController = TextEditingController();
   final TextEditingController locationController = TextEditingController();
-  final TextEditingController firmNameController = TextEditingController();
+  bool isDetectingLocation = false;
 
-  void _verifyPhoneAndSendOtp() {
-    if (phoneController.text.trim().length != 10) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('कृपया सही 10 अंकों का मोबाइल नंबर दर्ज करें!')),
+  Future<void> _detectRealLocation() async {
+    setState(() => isDetectingLocation = true);
+
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          _showMessage("लोकेशन अनुमति नहीं मिली!");
+          setState(() => isDetectingLocation = false);
+          return;
+        }
+      }
+
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
       );
-      return;
+
+      final url = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.latitude}&lon=${position.longitude}&zoom=14&addressdetails=1',
+      );
+      final response = await http.get(url, headers: {'User-Agent': 'KisanTradeApp'});
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final address = data['address'];
+        String village = address['village'] ?? address['suburb'] ?? address['town'] ?? address['city'] ?? 'गाँव/क्षेत्र';
+        String district = address['state_district'] ?? address['county'] ?? address['state'] ?? '';
+
+        setState(() {
+          locationController.text = "$village, $district (सटीक GPS)";
+        });
+      }
+    } catch (e) {
+      _showMessage("GPS से नाम नहीं मिला, कृपया खुद टाइप करें।");
+    } finally {
+      setState(() => isDetectingLocation = false);
     }
-    setState(() {
-      currentStep = 1; // OTP स्क्रीन पर जाएँ
-    });
   }
 
-  void _verifyOtp() {
-    if (otpController.text.trim().length < 4) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('कृपया वैध OTP दर्ज करें!')),
-      );
-      return;
-    }
-    setState(() {
-      currentStep = 2; // प्रोफाइल डिटेल स्क्रीन पर जाएँ
-    });
-  }
-
-  void _completeRegistration() {
-    if (nameController.text.isEmpty || locationController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('कृपया सभी जरूरी जानकारी भरें!')),
-      );
-      return;
-    }
-
-    // सफल रजिस्ट्रेशन
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('बधाई हो! 🎉'),
-        content: Text(
-          'नमस्ते ${nameController.text},\n'
-          'Kisan Trade ऐप पर आपका ${selectedRole} खाता सफलतापूर्वक बन गया है!',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              // यहाँ से डैशबोर्ड स्क्रीन खुलेगी
-            },
-            child: const Text('डैशबोर्ड पर जाएँ (Proceed)'),
-          ),
-        ],
-      ),
-    );
+  void _showMessage(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
@@ -102,22 +93,16 @@ class _RegistrationFlowScreenState extends State<RegistrationFlowScreen> {
         title: const Text('Kisan Trade - रजिस्ट्रेशन'),
         backgroundColor: Colors.green[800],
         foregroundColor: Colors.white,
-        centerTitle: true,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
-            // ऐप लोगो व टैगलाइन
-            Icon(Icons.eco, size: 60, color: Colors.green[800]),
-            const SizedBox(height: 8),
-            Text(
-              "किसान का सही भाव, खरीदार का सही सामान",
-              style: TextStyle(fontSize: 14, color: Colors.grey[700], fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 24),
+            const Icon(Icons.eco, size: 55, color: Colors.green),
+            const SizedBox(height: 5),
+            const Text("किसान का सही भाव, खरीदार का सही सामान", style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
 
-            // वर्तमान स्टेप के अनुसार विजेट
             if (currentStep == 0) _buildPhoneStep(),
             if (currentStep == 1) _buildOtpStep(),
             if (currentStep == 2) _buildProfileStep(),
@@ -127,73 +112,55 @@ class _RegistrationFlowScreenState extends State<RegistrationFlowScreen> {
     );
   }
 
-  // --- चरण 1: रोल और मोबाइल नंबर ---
   Widget _buildPhoneStep() {
     return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
       child: Padding(
-        padding: const EdgeInsets.all(20.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "आप कौन हैं? (Select Role)",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   child: ChoiceChip(
-                    label: const Center(child: Text("🌾 किसान (Farmer)")),
+                    label: const Center(child: Text("🌾 किसान")),
                     selected: selectedRole == 'किसान (Farmer)',
-                    selectedColor: Colors.green[100],
-                    onSelected: (val) {
-                      setState(() => selectedRole = 'किसान (Farmer)');
-                    },
+                    onSelected: (val) => setState(() => selectedRole = 'किसान (Farmer)'),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: ChoiceChip(
-                    label: const Center(child: Text("💼 खरीदार (Buyer)")),
+                    label: const Center(child: Text("💼 खरीदार")),
                     selected: selectedRole == 'खरीदार (Buyer)',
-                    selectedColor: Colors.green[100],
-                    onSelected: (val) {
-                      setState(() => selectedRole = 'खरीदार (Buyer)');
-                    },
+                    onSelected: (val) => setState(() => selectedRole = 'खरीदार (Buyer)'),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 20),
-            const Text("मोबाइल नंबर दर्ज करें", style: TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
             TextField(
               controller: phoneController,
               keyboardType: TextInputType.phone,
               maxLength: 10,
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.phone),
+              decoration: const InputDecoration(
                 prefixText: "+91  ",
-                hintText: "9876543210",
+                hintText: "10 अंकों का मोबाइल नंबर",
+                border: OutlineInputBorder(),
                 counterText: "",
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green[800],
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: _verifyPhoneAndSendOtp,
-                child: const Text("OTP भेजें (Get OTP)", style: TextStyle(color: Colors.white, fontSize: 16)),
-              ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green[800], minimumSize: const Size(double.infinity, 48)),
+              onPressed: () {
+                if (phoneController.text.length == 10) {
+                  setState(() => currentStep = 1);
+                } else {
+                  _showMessage("कृपया 10 अंकों का नंबर लिखें");
+                }
+              },
+              child: const Text("OTP भेजें", style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -201,45 +168,31 @@ class _RegistrationFlowScreenState extends State<RegistrationFlowScreen> {
     );
   }
 
-  // --- चरण 2: OTP सत्यापन ---
   Widget _buildOtpStep() {
     return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
       child: Padding(
-        padding: const EdgeInsets.all(20.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            Text("मोबाइल +91 ${phoneController.text} पर भेजा गया कोड दर्ज करें:", textAlign: TextAlign.center),
-            const SizedBox(height: 16),
+            Text("+91 ${phoneController.text} पर भेजा गया कोड दर्ज करें:"),
+            const SizedBox(height: 10),
             TextField(
               controller: otpController,
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
-              maxLength: 6,
-              style: const TextStyle(fontSize: 24, letterSpacing: 8, fontWeight: FontWeight.bold),
-              decoration: InputDecoration(
-                counterText: "",
-                hintText: "• • • • • •",
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
+              style: const TextStyle(fontSize: 22, letterSpacing: 6, fontWeight: FontWeight.bold),
+              decoration: const InputDecoration(hintText: "1234", border: OutlineInputBorder()),
             ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green[800],
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: _verifyOtp,
-                child: const Text("OTP सत्यापित करें", style: TextStyle(color: Colors.white, fontSize: 16)),
-              ),
-            ),
-            TextButton(
-              onPressed: () => setState(() => currentStep = 0),
-              child: const Text("नंबर बदलें (Change Number)"),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green[800], minimumSize: const Size(double.infinity, 48)),
+              onPressed: () {
+                if (otpController.text.isNotEmpty) {
+                  setState(() => currentStep = 2);
+                }
+              },
+              child: const Text("OTP सत्यापित करें", style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -247,67 +200,208 @@ class _RegistrationFlowScreenState extends State<RegistrationFlowScreen> {
     );
   }
 
-  // --- चरण 3: प्रोफाइल विवरण ---
   Widget _buildProfileStep() {
     return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
       child: Padding(
-        padding: const EdgeInsets.all(20.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("अपनी जानकारी दर्ज करें ($selectedRole)", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
+            Text("$selectedRole - प्रोफाइल पूरी करें", style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
             TextField(
               controller: nameController,
-              decoration: InputDecoration(
-                labelText: "पूरा नाम (Full Name)",
-                prefixIcon: const Icon(Icons.person),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
+              decoration: const InputDecoration(labelText: "पूरा नाम", border: OutlineInputBorder()),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: locationController,
               decoration: InputDecoration(
-                labelText: "गाँव / मंडी / ज़िला (Location)",
-                prefixIcon: const Icon(Icons.location_on),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.my_location, color: Colors.green),
-                  tooltip: "GPS से खोजें",
-                  onPressed: () {
-                    // यहाँ GPS लोकेशन ऑटो-फिल होगी
-                    locationController.text = "करनाल, हरियाणा (GPS Detected)";
-                  },
-                ),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                labelText: "गाँव / मंडी / ज़िला",
+                border: const OutlineInputBorder(),
+                suffixIcon: isDetectingLocation
+                    ? const Padding(padding: EdgeInsets.all(10), child: CircularProgressIndicator(strokeWidth: 2))
+                    : IconButton(
+                        icon: const Icon(Icons.my_location, color: Colors.green),
+                        tooltip: "असली GPS से खोजें",
+                        onPressed: _detectRealLocation,
+                      ),
               ),
             ),
-            if (selectedRole == 'खरीदार (Buyer)') ...[
-              const SizedBox(height: 12),
-              TextField(
-                controller: firmNameController,
-                decoration: InputDecoration(
-                  labelText: "दुकान / फर्म का नाम (Shop/Firm Name)",
-                  prefixIcon: const Icon(Icons.store),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-            ],
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green[800],
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: _completeRegistration,
-                child: const Text("रजिस्ट्रेशन पूरा करें (Finish)", style: TextStyle(color: Colors.white, fontSize: 16)),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green[800], minimumSize: const Size(double.infinity, 48)),
+              onPressed: () {
+                if (nameController.text.isEmpty || locationController.text.isEmpty) {
+                  _showMessage("कृपया नाम और लोकेशन भरें");
+                  return;
+                }
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => FarmerDashboard(
+                      farmerName: nameController.text,
+                      farmerLocation: locationController.text,
+                    ),
+                  ),
+                );
+              },
+              child: const Text("डैशबोर्ड पर जाएँ ➔", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// किसान डैशबोर्ड और स्मार्ट कैलकुलेटर स्क्रीन
+class FarmerDashboard extends StatefulWidget {
+  final String farmerName;
+  final String farmerLocation;
+
+  const FarmerDashboard({super.key, required this.farmerName, required this.farmerLocation});
+
+  @override
+  State<FarmerDashboard> createState() => _FarmerDashboardState();
+}
+
+class _FarmerDashboardState extends State<FarmerDashboard> {
+  double cropQuantity = 100;
+  String selectedCrop = 'गेहूँ (Wheat)';
+  final double transportPerKm = 3.5;
+  final double commissionPercent = 1.0;
+
+  final List<Map<String, dynamic>> buyers = [
+    {"name": "खरीदार A (लोकल गल्ला मंडी)", "km": 5.0, "rate": 2500.0},
+    {"name": "खरीदार B (कृषि एग्रो प्रोडक्ट्स)", "km": 12.0, "rate": 2560.0},
+    {"name": "खरीदार C (बड़ा व्यापारी - गोदाम)", "km": 20.0, "rate": 2620.0},
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("नमस्ते, ${widget.farmerName}"),
+        backgroundColor: Colors.green[800],
+        foregroundColor: Colors.white,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(8)),
+              child: Row(
+                children: [
+                  const Icon(Icons.location_on, color: Colors.green),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text("आपकी लोकेशन: ${widget.farmerLocation}", style: const TextStyle(fontWeight: FontWeight.w600))),
+                ],
               ),
             ),
+            const SizedBox(height: 16),
+            Card(
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(14.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("🌾 फसल और वजन दर्ज करें:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: selectedCrop,
+                            items: ['गेहूँ (Wheat)', 'धान (Paddy)', 'सरसों (Mustard)', 'मक्का (Maize)']
+                                .map((crop) => DropdownMenuItem(value: crop, child: Text(crop)))
+                                .toList(),
+                            onChanged: (val) => setState(() => selectedCrop = val!),
+                            decoration: const InputDecoration(border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 10)),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextFormField(
+                            initialValue: cropQuantity.toInt().toString(),
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: "मात्रा (क्विंटल)", border: OutlineInputBorder()),
+                            onChanged: (val) => setState(() => cropQuantity = double.tryParse(val) ?? 0),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text("📊 खरीदार (भाड़ा व कमीशन काटकर शुद्ध बचत):", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 8),
+
+            ...buyers.map((buyer) {
+              double grossAmount = cropQuantity * buyer['rate'];
+              double transportCost = buyer['km'] * transportPerKm * (cropQuantity / 10);
+              double commission = (grossAmount * commissionPercent) / 100;
+              double netInHand = grossAmount - transportCost - commission;
+
+              return Card(
+                elevation: 3,
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.all(14.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(child: Text(buyer['name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                          Chip(label: Text("${buyer['km']} KM"), backgroundColor: Colors.blue[50]),
+                        ],
+                      ),
+                      const Divider(),
+                      Text("बोली भाव: ₹${buyer['rate'].toInt()} / क्विंटल"),
+                      Text("कुल मूल्य: ₹${grossAmount.toStringAsFixed(0)}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                      Text("परिवहन खर्च (भाड़ा): - ₹${transportCost.toStringAsFixed(0)}", style: const TextStyle(color: Colors.red)),
+                      Text("ऐप कमीशन (1%): - ₹${commission.toStringAsFixed(0)}", style: const TextStyle(color: Colors.orange)),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: Colors.green[100], borderRadius: BorderRadius.circular(8)),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text("किसान को मिलेंगे (Net):", style: TextStyle(fontWeight: FontWeight.bold)),
+                            Text("₹${netInHand.toStringAsFixed(0)}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.green[900])),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green[800], minimumSize: const Size(double.infinity, 42)),
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text("सौदा पक्का! 🎉"),
+                              content: Text("${buyer['name']} को $cropQuantity क्विंटल $selectedCrop का ऑर्डर भेज दिया गया है।"),
+                              actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("ठीक है"))],
+                            ),
+                          );
+                        },
+                        child: const Text("सौदा पक्का करें (Sell Now)", style: TextStyle(color: Colors.white)),
+                      )
+                    ],
+                  ),
+                ),
+              );
+            }),
           ],
         ),
       ),
