@@ -1,7 +1,4 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
 
 void main() {
   runApp(const KisanTradeApp());
@@ -13,7 +10,7 @@ class KisanTradeApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowColors: false,
+      debugShowCheckedModeBanner: false,
       title: 'Kisan Trade',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E7D32)),
@@ -24,7 +21,7 @@ class KisanTradeApp extends StatelessWidget {
   }
 }
 
-// रजिस्ट्रेशन स्क्रीन
+// ----------------- रजिस्ट्रेशन स्क्रीन -----------------
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
 
@@ -39,47 +36,6 @@ class _AuthScreenState extends State<AuthScreen> {
   final TextEditingController otpController = TextEditingController();
   final TextEditingController nameController = TextEditingController();
   final TextEditingController locationController = TextEditingController();
-  bool isDetectingLocation = false;
-
-  Future<void> _detectRealLocation() async {
-    setState(() => isDetectingLocation = true);
-
-    try {
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          _showMessage("लोकेशन अनुमति नहीं मिली!");
-          setState(() => isDetectingLocation = false);
-          return;
-        }
-      }
-
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      final url = Uri.parse(
-        'https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.latitude}&lon=${position.longitude}&zoom=14&addressdetails=1',
-      );
-      final response = await http.get(url, headers: {'User-Agent': 'KisanTradeApp'});
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final address = data['address'];
-        String village = address['village'] ?? address['suburb'] ?? address['town'] ?? address['city'] ?? 'गाँव/क्षेत्र';
-        String district = address['state_district'] ?? address['county'] ?? address['state'] ?? '';
-
-        setState(() {
-          locationController.text = "$village, $district (सटीक GPS)";
-        });
-      }
-    } catch (e) {
-      _showMessage("GPS से नाम नहीं मिला, कृपया खुद टाइप करें।");
-    } finally {
-      setState(() => isDetectingLocation = false);
-    }
-  }
 
   void _showMessage(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
@@ -100,9 +56,11 @@ class _AuthScreenState extends State<AuthScreen> {
           children: [
             const Icon(Icons.eco, size: 55, color: Colors.green),
             const SizedBox(height: 5),
-            const Text("किसान का सही भाव, खरीदार का सही सामान", style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              "किसान का सही भाव, खरीदार का सही सामान",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 20),
-
             if (currentStep == 0) _buildPhoneStep(),
             if (currentStep == 1) _buildOtpStep(),
             if (currentStep == 2) _buildProfileStep(),
@@ -152,7 +110,10 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
             const SizedBox(height: 16),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green[800], minimumSize: const Size(double.infinity, 48)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green[800],
+                minimumSize: const Size(double.infinity, 48),
+              ),
               onPressed: () {
                 if (phoneController.text.length == 10) {
                   setState(() => currentStep = 1);
@@ -186,10 +147,15 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
             const SizedBox(height: 16),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green[800], minimumSize: const Size(double.infinity, 48)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green[800],
+                minimumSize: const Size(double.infinity, 48),
+              ),
               onPressed: () {
                 if (otpController.text.isNotEmpty) {
                   setState(() => currentStep = 2);
+                } else {
+                  _showMessage("कृपया OTP दर्ज करें");
                 }
               },
               child: const Text("OTP सत्यापित करें", style: TextStyle(color: Colors.white)),
@@ -218,19 +184,23 @@ class _AuthScreenState extends State<AuthScreen> {
               controller: locationController,
               decoration: InputDecoration(
                 labelText: "गाँव / मंडी / ज़िला",
+                hintText: "उदा. शाहपुर, मेरठ",
                 border: const OutlineInputBorder(),
-                suffixIcon: isDetectingLocation
-                    ? const Padding(padding: EdgeInsets.all(10), child: CircularProgressIndicator(strokeWidth: 2))
-                    : IconButton(
-                        icon: const Icon(Icons.my_location, color: Colors.green),
-                        tooltip: "असली GPS से खोजें",
-                        onPressed: _detectRealLocation,
-                      ),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.my_location, color: Colors.green),
+                  tooltip: "लोकेशन सेट करें",
+                  onPressed: () {
+                    locationController.text = "शाहपुर (निकटतम मंडी क्षेत्र)";
+                  },
+                ),
               ),
             ),
             const SizedBox(height: 20),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green[800], minimumSize: const Size(double.infinity, 48)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green[800],
+                minimumSize: const Size(double.infinity, 48),
+              ),
               onPressed: () {
                 if (nameController.text.isEmpty || locationController.text.isEmpty) {
                   _showMessage("कृपया नाम और लोकेशन भरें");
@@ -246,7 +216,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                 );
               },
-              child: const Text("डैशबोर्ड पर जाएँ ➔", style: TextStyle(color: Colors.white)),
+              child: const Text("डैशबोर्ड पर जाएँ (Proceed) ➔", style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -255,7 +225,7 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 }
 
-// किसान डैशबोर्ड और स्मार्ट कैलकुलेटर स्क्रीन
+// ----------------- किसान डैशबोर्ड और स्मार्ट कैलकुलेटर -----------------
 class FarmerDashboard extends StatefulWidget {
   final String farmerName;
   final String farmerLocation;
@@ -267,7 +237,7 @@ class FarmerDashboard extends StatefulWidget {
 }
 
 class _FarmerDashboardState extends State<FarmerDashboard> {
-  double cropQuantity = 100;
+  double cropQuantity = 100; // 100 क्विंटल डिफ़ॉल्ट
   String selectedCrop = 'गेहूँ (Wheat)';
   final double transportPerKm = 3.5;
   final double commissionPercent = 1.0;
@@ -298,7 +268,12 @@ class _FarmerDashboardState extends State<FarmerDashboard> {
                 children: [
                   const Icon(Icons.location_on, color: Colors.green),
                   const SizedBox(width: 6),
-                  Expanded(child: Text("आपकी लोकेशन: ${widget.farmerLocation}", style: const TextStyle(fontWeight: FontWeight.w600))),
+                  Expanded(
+                    child: Text(
+                      "आपकी लोकेशन: ${widget.farmerLocation}",
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -340,9 +315,11 @@ class _FarmerDashboardState extends State<FarmerDashboard> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text("📊 खरीदार (भाड़ा व कमीशन काटकर शुद्ध बचत):", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text(
+              "📊 खरीदार (भाड़ा व कमीशन काटकर शुद्ध बचत):",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
             const SizedBox(height: 8),
-
             ...buyers.map((buyer) {
               double grossAmount = cropQuantity * buyer['rate'];
               double transportCost = buyer['km'] * transportPerKm * (cropQuantity / 10);
@@ -361,7 +338,9 @@ class _FarmerDashboardState extends State<FarmerDashboard> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Expanded(child: Text(buyer['name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                          Expanded(
+                            child: Text(buyer['name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          ),
                           Chip(label: Text("${buyer['km']} KM"), backgroundColor: Colors.blue[50]),
                         ],
                       ),
@@ -378,13 +357,19 @@ class _FarmerDashboardState extends State<FarmerDashboard> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             const Text("किसान को मिलेंगे (Net):", style: TextStyle(fontWeight: FontWeight.bold)),
-                            Text("₹${netInHand.toStringAsFixed(0)}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.green[900])),
+                            Text(
+                              "₹${netInHand.toStringAsFixed(0)}",
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.green[900]),
+                            ),
                           ],
                         ),
                       ),
                       const SizedBox(height: 8),
                       ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green[800], minimumSize: const Size(double.infinity, 42)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green[800],
+                          minimumSize: const Size(double.infinity, 42),
+                        ),
                         onPressed: () {
                           showDialog(
                             context: context,
