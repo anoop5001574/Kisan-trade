@@ -24,7 +24,7 @@ jobs:
       - name: Create Project and Inject Code
         run: |
           flutter create --org com.kisantrade --project-name kisan_trade kisan_app
-          cp main.dart kisan_app/lib/main.dart
+          find . -maxdepth 1 -iname "*dart" -exec cp -f "{}" kisan_app/lib/main.dart \;
 
       - name: Build Android APK
         run: |
